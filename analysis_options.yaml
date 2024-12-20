@@ -1,0 +1,9 @@
+# include: package:flutter_lints/flutter.yaml
+# analysis_options.yaml
+linter:
+  rules:
+    - always_declare_return_types
+    - camel_case_types
+    - empty_constructor_bodies
+    - prefer_single_quotes
+    - prefer_const_constructors
