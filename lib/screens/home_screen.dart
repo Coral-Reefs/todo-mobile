@@ -7,6 +7,9 @@ import 'package:todo/screens/widgets/completed_widget.dart';
 import 'package:todo/screens/widgets/pending_widget.dart';
 import 'package:todo/services/auth_service.dart';
 import 'package:todo/services/database_service.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/data/latest_all.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -17,6 +20,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _buttonIndex = 0;
+  late FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin;
   final List<Widget> _widgets = [
     // pending tasks
     PendingWidget(),
@@ -24,6 +28,52 @@ class _HomeScreenState extends State<HomeScreen> {
     CompletedWidget(),
   ];
   @override
+  void initState() {
+    super.initState();
+    flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+    _initializeNotifications();
+    _initializeTimeZones();
+  }
+
+  void _initializeNotifications() async {
+    const AndroidInitializationSettings initializationSettingsAndroid =
+        AndroidInitializationSettings('app_icon');
+    const InitializationSettings initializationSettings =
+        InitializationSettings(android: initializationSettingsAndroid);
+    await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+  }
+
+  void _initializeTimeZones() {
+    tz.initializeTimeZones();
+    tz.setLocalLocation(tz.getLocation('Asia/Kuala_Lumpur'));
+  }
+
+  Future<void> _scheduleNotification(
+      int id, String title, DateTime dueDate) async {
+    final AndroidNotificationDetails androidPlatformChannelSpecifics =
+        const AndroidNotificationDetails(
+      'todo_channel',
+      'Todo Notifications',
+      channelDescription: 'Notifications for due tasks',
+      importance: Importance.high,
+      priority: Priority.high,
+    );
+    final NotificationDetails platformChannelSpecifics =
+        NotificationDetails(android: androidPlatformChannelSpecifics);
+
+    await flutterLocalNotificationsPlugin.zonedSchedule(
+      id,
+      'Upcoming Task: $title',
+      'Your task is due in 30 minutes.',
+      tz.TZDateTime.from(dueDate, tz.local)
+          .subtract(const Duration(minutes: 30)),
+      platformChannelSpecifics,
+      androidAllowWhileIdle: true,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+    );
+  }
+
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF1d2630),
@@ -256,17 +306,21 @@ class _HomeScreenState extends State<HomeScreen> {
                   backgroundColor: Colors.indigo,
                   foregroundColor: Colors.white),
               onPressed: () async {
-                if (todo == null) {
-                  // Convert the selected DateTime to Timestamp before saving it
-                  final dueDate = _dueController.text.isNotEmpty
-                      ? Timestamp.fromDate(DateFormat('yyyy-MM-dd HH:mm')
-                          .parse(_dueController.text))
-                      : null;
+                final dueDate = _dueController.text.isNotEmpty
+                    ? Timestamp.fromDate(DateFormat('yyyy-MM-dd HH:mm')
+                        .parse(_dueController.text))
+                    : null;
 
-                  await _databaseService.addTodoItem(
+                if (todo == null) {
+                  final id = await _databaseService.addTodoItem(
                     _titleController.text,
                     _descriptionController.text,
                     dueDate!,
+                  );
+                  await _scheduleNotification(
+                    id.hashCode,
+                    _titleController.text,
+                    dueDate.toDate(),
                   );
                 } else {
                   await _databaseService.updateTodo(
