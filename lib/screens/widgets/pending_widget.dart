@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:intl/intl.dart';
 import 'package:todo/model/todo_model.dart';
+import 'package:todo/notifications/notification_service.dart';
 import 'package:todo/services/database_service.dart';
-import 'package:timeago/timeago.dart' as timeago;
 
 class PendingWidget extends StatefulWidget {
   const PendingWidget({super.key});
@@ -17,12 +17,17 @@ class PendingWidget extends StatefulWidget {
 class _PendingWidgetState extends State<PendingWidget> {
   User? user = FirebaseAuth.instance.currentUser;
   late String uid;
+  final NotificationService _notificationService = NotificationService();
   final DatabaseService _databaseService = DatabaseService();
 
   @override
   void initState() {
     super.initState();
     uid = FirebaseAuth.instance.currentUser!.uid;
+  }
+
+  Future<void> _scheduleNotification(String taskTitle, DateTime dueDate) async {
+    await _notificationService.scheduleNotification(dueDate, taskTitle);
   }
 
   Widget build(BuildContext context) {
@@ -87,7 +92,7 @@ class _PendingWidgetState extends State<PendingWidget> {
                             // style: TextStyle(fontWeight: FontWeight.w500),
                           ),
                           trailing: Text(
-                            "Due ${timeago.format(dt)}",
+                            'Due ${formatRelativeTime(dt)}',
                             // style: TextStyle(fontWeight: FontWeight.bold),
                           ))),
                 );
@@ -244,23 +249,30 @@ class _PendingWidgetState extends State<PendingWidget> {
                   backgroundColor: Colors.indigo,
                   foregroundColor: Colors.white),
               onPressed: () async {
+                final dueDate = _dueController.text.isNotEmpty
+                    ? Timestamp.fromDate(DateFormat('yyyy-MM-dd HH:mm')
+                        .parse(_dueController.text))
+                    : null;
                 if (todo == null) {
-                  // Convert the selected DateTime to Timestamp before saving it
-                  final dueDate = _dueController.text.isNotEmpty
-                      ? Timestamp.fromDate(DateFormat('yyyy-MM-dd HH:mm')
-                          .parse(_dueController.text))
-                      : null;
-
                   await _databaseService.addTodoItem(
                     _titleController.text,
                     _descriptionController.text,
                     dueDate!,
+                  );
+                  _scheduleNotification(
+                    _titleController.text,
+                    dueDate.toDate(),
                   );
                 } else {
                   await _databaseService.updateTodo(
                     todo.id,
                     _titleController.text,
                     _descriptionController.text,
+                    dueDate!,
+                  );
+                  _scheduleNotification(
+                    _titleController.text,
+                    dueDate.toDate(),
                   );
                 }
                 Navigator.pop(context);
@@ -271,5 +283,37 @@ class _PendingWidgetState extends State<PendingWidget> {
         );
       },
     );
+  }
+}
+
+String formatRelativeTime(DateTime date) {
+  final difference = date.difference(DateTime.now());
+
+  if (difference.inDays > 1) {
+    return 'in ${difference.inDays} days';
+  } else if (difference.inDays == 1) {
+    return 'tomorrow';
+  } else if (difference.inHours > 1) {
+    return 'in ${difference.inHours} hours';
+  } else if (difference.inHours == 1) {
+    return 'in an hour';
+  } else if (difference.inMinutes > 1) {
+    return 'in ${difference.inMinutes} minutes';
+  } else if (difference.inMinutes == 1) {
+    return 'in a minute';
+  } else if (difference.isNegative) {
+    // Past time
+    final pastDifference = DateTime.now().difference(date);
+    if (pastDifference.inDays > 1) {
+      return '${pastDifference.inDays} days ago';
+    } else if (pastDifference.inHours > 1) {
+      return '${pastDifference.inHours} hours ago';
+    } else if (pastDifference.inMinutes > 1) {
+      return '${pastDifference.inMinutes} minutes ago';
+    } else {
+      return 'just now';
+    }
+  } else {
+    return 'just now';
   }
 }

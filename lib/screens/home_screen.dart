@@ -2,14 +2,12 @@ import 'package:cloud_firestore_platform_interface/src/timestamp.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:todo/model/todo_model.dart';
+import 'package:todo/notifications/notification_service.dart';
 import 'package:todo/screens/login_screen.dart';
 import 'package:todo/screens/widgets/completed_widget.dart';
 import 'package:todo/screens/widgets/pending_widget.dart';
 import 'package:todo/services/auth_service.dart';
 import 'package:todo/services/database_service.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:timezone/data/latest_all.dart' as tz;
-import 'package:timezone/timezone.dart' as tz;
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -20,60 +18,23 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _buttonIndex = 0;
-  late FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin;
+  final NotificationService _notificationService = NotificationService();
   final List<Widget> _widgets = [
-    // pending tasks
     PendingWidget(),
-    // completed tasks
     CompletedWidget(),
   ];
+
   @override
   void initState() {
     super.initState();
-    flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
-    _initializeNotifications();
-    _initializeTimeZones();
+    _notificationService.initialize();
   }
 
-  void _initializeNotifications() async {
-    const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('app_icon');
-    const InitializationSettings initializationSettings =
-        InitializationSettings(android: initializationSettingsAndroid);
-    await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+  Future<void> _scheduleNotification(String taskTitle, DateTime dueDate) async {
+    await _notificationService.scheduleNotification(dueDate, taskTitle);
   }
 
-  void _initializeTimeZones() {
-    tz.initializeTimeZones();
-    tz.setLocalLocation(tz.getLocation('Asia/Kuala_Lumpur'));
-  }
-
-  Future<void> _scheduleNotification(
-      int id, String title, DateTime dueDate) async {
-    final AndroidNotificationDetails androidPlatformChannelSpecifics =
-        const AndroidNotificationDetails(
-      'todo_channel',
-      'Todo Notifications',
-      channelDescription: 'Notifications for due tasks',
-      importance: Importance.high,
-      priority: Priority.high,
-    );
-    final NotificationDetails platformChannelSpecifics =
-        NotificationDetails(android: androidPlatformChannelSpecifics);
-
-    await flutterLocalNotificationsPlugin.zonedSchedule(
-      id,
-      'Upcoming Task: $title',
-      'Your task is due in 30 minutes.',
-      tz.TZDateTime.from(dueDate, tz.local)
-          .subtract(const Duration(minutes: 30)),
-      platformChannelSpecifics,
-      androidAllowWhileIdle: true,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-    );
-  }
-
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF1d2630),
@@ -86,7 +47,7 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
               onPressed: () async {
                 await AuthService().signOut();
-                Navigator.push(context,
+                Navigator.pushReplacement(context,
                     MaterialPageRoute(builder: (context) => LoginScreen()));
               },
               icon: const Icon(Icons.exit_to_app))
@@ -94,65 +55,15 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: SingleChildScrollView(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const SizedBox(
-            height: 20,
-          ),
+          const SizedBox(height: 20),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              InkWell(
-                  onTap: () {
-                    setState(() {
-                      _buttonIndex = 0;
-                    });
-                  },
-                  child: Container(
-                    height: 50,
-                    width: MediaQuery.of(context).size.width / 2.2,
-                    decoration: BoxDecoration(
-                        color: _buttonIndex == 0 ? Colors.indigo : Colors.white,
-                        borderRadius: BorderRadius.circular(10)),
-                    child: Center(
-                      child: Text(
-                        'Pending',
-                        style: TextStyle(
-                            fontSize: _buttonIndex == 0 ? 16 : 14,
-                            fontWeight: FontWeight.w500,
-                            color: _buttonIndex == 0
-                                ? Colors.white
-                                : Colors.black38),
-                      ),
-                    ),
-                  )),
-              InkWell(
-                  onTap: () {
-                    setState(() {
-                      _buttonIndex = 1;
-                    });
-                  },
-                  child: Container(
-                    height: 50,
-                    width: MediaQuery.of(context).size.width / 2.2,
-                    decoration: BoxDecoration(
-                        color: _buttonIndex == 1 ? Colors.indigo : Colors.white,
-                        borderRadius: BorderRadius.circular(10)),
-                    child: Center(
-                      child: Text(
-                        'Completed',
-                        style: TextStyle(
-                            fontSize: _buttonIndex == 1 ? 16 : 14,
-                            fontWeight: FontWeight.w500,
-                            color: _buttonIndex == 1
-                                ? Colors.white
-                                : Colors.black38),
-                      ),
-                    ),
-                  ))
+              _buildTabButton('Pending', 0),
+              _buildTabButton('Completed', 1),
             ],
           ),
-          const SizedBox(
-            height: 30,
-          ),
+          const SizedBox(height: 30),
           _widgets[_buttonIndex],
         ]),
       ),
@@ -162,6 +73,34 @@ class _HomeScreenState extends State<HomeScreen> {
           onPressed: () {
             _showTaskDialog(context);
           }),
+    );
+  }
+
+  Widget _buildTabButton(String label, int index) {
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _buttonIndex = index;
+        });
+      },
+      child: Container(
+        height: 50,
+        width: MediaQuery.of(context).size.width / 2.2,
+        decoration: BoxDecoration(
+          color: _buttonIndex == index ? Colors.indigo : Colors.white,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: _buttonIndex == index ? 16 : 14,
+              fontWeight: FontWeight.w500,
+              color: _buttonIndex == index ? Colors.white : Colors.black38,
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -183,122 +122,22 @@ class _HomeScreenState extends State<HomeScreen> {
           backgroundColor: Colors.white,
           title: Text(
             todo == null ? 'Add Task' : 'Edit Task',
-            style: const TextStyle(
-              fontWeight: FontWeight.w500,
-            ),
+            style: const TextStyle(fontWeight: FontWeight.w500),
           ),
           content: SingleChildScrollView(
-            child: Container(
-              width: MediaQuery.of(context).size.width,
-              child: Column(
-                children: [
-                  TextField(
-                    controller: _titleController,
-                    decoration: const InputDecoration(
-                        labelText: 'Title', border: OutlineInputBorder()),
-                  ),
-                  const SizedBox(
-                    height: 10,
-                  ),
-                  TextField(
-                    controller: _descriptionController,
-                    decoration: const InputDecoration(
-                        labelText: 'Description', border: OutlineInputBorder()),
-                  ),
-                  const SizedBox(
-                    height: 10,
-                  ),
-                  // Due Date with Calendar Icon
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _dueController,
-                          decoration: const InputDecoration(
-                              labelText: 'Due Date',
-                              border: OutlineInputBorder()),
-                          readOnly: true, // Make the TextField read-only
-                          onTap: () async {
-                            FocusScope.of(context).requestFocus(FocusNode());
-
-                            DateTime? selectedDate = await showDatePicker(
-                              context: context,
-                              initialDate: DateTime.now(),
-                              firstDate: DateTime(2000),
-                              lastDate: DateTime(2101),
-                            );
-
-                            if (selectedDate != null) {
-                              TimeOfDay? selectedTime = await showTimePicker(
-                                context: context,
-                                initialTime:
-                                    TimeOfDay.fromDateTime(DateTime.now()),
-                              );
-
-                              if (selectedTime != null) {
-                                final DateTime combinedDateTime = DateTime(
-                                  selectedDate.year,
-                                  selectedDate.month,
-                                  selectedDate.day,
-                                  selectedTime.hour,
-                                  selectedTime.minute,
-                                );
-
-                                _dueController.text =
-                                    DateFormat('yyyy-MM-dd HH:mm').format(
-                                        combinedDateTime); // Format date
-                              }
-                            }
-                          },
-                        ),
-                      ),
-                      IconButton(
-                        icon: Icon(Icons.calendar_today),
-                        onPressed: () async {
-                          // Trigger the same date picker dialog when icon is tapped
-                          FocusScope.of(context).requestFocus(FocusNode());
-
-                          DateTime? selectedDate = await showDatePicker(
-                            context: context,
-                            initialDate: DateTime.now(),
-                            firstDate: DateTime(2000),
-                            lastDate: DateTime(2101),
-                          );
-
-                          if (selectedDate != null) {
-                            TimeOfDay? selectedTime = await showTimePicker(
-                              context: context,
-                              initialTime:
-                                  TimeOfDay.fromDateTime(DateTime.now()),
-                            );
-
-                            if (selectedTime != null) {
-                              final DateTime combinedDateTime = DateTime(
-                                selectedDate.year,
-                                selectedDate.month,
-                                selectedDate.day,
-                                selectedTime.hour,
-                                selectedTime.minute,
-                              );
-
-                              _dueController.text =
-                                  DateFormat('yyyy-MM-dd HH:mm')
-                                      .format(combinedDateTime); // Format date
-                            }
-                          }
-                        },
-                      )
-                    ],
-                  ),
-                ],
-              ),
+            child: Column(
+              children: [
+                _buildTextField('Title', _titleController),
+                const SizedBox(height: 10),
+                _buildTextField('Description', _descriptionController),
+                const SizedBox(height: 10),
+                _buildDatePicker(_dueController),
+              ],
             ),
           ),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
+              onPressed: () => Navigator.pop(context),
               child: const Text('Cancel'),
             ),
             ElevatedButton(
@@ -317,16 +156,19 @@ class _HomeScreenState extends State<HomeScreen> {
                     _descriptionController.text,
                     dueDate!,
                   );
-                  await _scheduleNotification(
-                    id.hashCode,
+                  _scheduleNotification(
                     _titleController.text,
                     dueDate.toDate(),
                   );
                 } else {
                   await _databaseService.updateTodo(
-                    todo.id,
+                      todo.id,
+                      _titleController.text,
+                      _descriptionController.text,
+                      dueDate!);
+                  _scheduleNotification(
                     _titleController.text,
-                    _descriptionController.text,
+                    dueDate.toDate(),
                   );
                 }
                 Navigator.pop(context);
@@ -337,5 +179,70 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       },
     );
+  }
+
+  Widget _buildTextField(String label, TextEditingController controller) {
+    return TextField(
+      controller: controller,
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
+      ),
+    );
+  }
+
+  Widget _buildDatePicker(TextEditingController dueController) {
+    return Row(
+      children: [
+        Expanded(
+          child: TextField(
+            controller: dueController,
+            decoration: const InputDecoration(
+              labelText: 'Due Date',
+              border: OutlineInputBorder(),
+            ),
+            readOnly: true,
+            onTap: () async {
+              await _selectDateAndTime(dueController);
+            },
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.calendar_today),
+          onPressed: () async {
+            await _selectDateAndTime(dueController);
+          },
+        )
+      ],
+    );
+  }
+
+  Future<void> _selectDateAndTime(TextEditingController controller) async {
+    DateTime? selectedDate = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2101),
+    );
+
+    if (selectedDate != null) {
+      TimeOfDay? selectedTime = await showTimePicker(
+        context: context,
+        initialTime: TimeOfDay.fromDateTime(DateTime.now()),
+      );
+
+      if (selectedTime != null) {
+        final DateTime combinedDateTime = DateTime(
+          selectedDate.year,
+          selectedDate.month,
+          selectedDate.day,
+          selectedTime.hour,
+          selectedTime.minute,
+        );
+
+        controller.text =
+            DateFormat('yyyy-MM-dd HH:mm').format(combinedDateTime);
+      }
+    }
   }
 }

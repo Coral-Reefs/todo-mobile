@@ -20,13 +20,15 @@ class DatabaseService {
     });
   }
 
-  Future<void> updateTodo(String id, String title, String description) async {
+  Future<void> updateTodo(
+      String id, String title, String description, Timestamp due) async {
     final updateTodoCollection =
         FirebaseFirestore.instance.collection('todos').doc(id);
 
     return await updateTodoCollection.update({
       'title': title,
       'description': description,
+      'due': due,
     });
   }
 
@@ -43,6 +45,7 @@ class DatabaseService {
     return todoCollection
         .where('uid', isEqualTo: user!.uid)
         .where('completed', isEqualTo: false)
+        // .orderBy('createdAt', descending: true)
         .snapshots()
         .map(_todoListFromSnapshot);
   }
@@ -51,6 +54,7 @@ class DatabaseService {
     return todoCollection
         .where('uid', isEqualTo: user!.uid)
         .where('completed', isEqualTo: true)
+        // .orderBy('createdAt', descending: true)
         .snapshots()
         .map(_todoListFromSnapshot);
   }

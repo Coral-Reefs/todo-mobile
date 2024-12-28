@@ -5,7 +5,6 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:intl/intl.dart';
 import 'package:todo/model/todo_model.dart';
 import 'package:todo/services/database_service.dart';
-import 'package:timeago/timeago.dart' as timeago;
 
 class CompletedWidget extends StatefulWidget {
   const CompletedWidget({super.key});
@@ -69,7 +68,7 @@ class _CompletedWidgetState extends State<CompletedWidget> {
                             // style: TextStyle(fontWeight: FontWeight.w500),
                           ),
                           trailing: Text(
-                            "Due ${timeago.format(dt)}",
+                            "Due ${formatRelativeTime(dt)}",
                             // style: TextStyle(fontWeight: FontWeight.bold),
                           ))),
                 );
@@ -83,5 +82,37 @@ class _CompletedWidgetState extends State<CompletedWidget> {
         }
       },
     );
+  }
+}
+
+String formatRelativeTime(DateTime date) {
+  final difference = date.difference(DateTime.now());
+
+  if (difference.inDays > 1) {
+    return 'in ${difference.inDays} days';
+  } else if (difference.inDays == 1) {
+    return 'tomorrow';
+  } else if (difference.inHours > 1) {
+    return 'in ${difference.inHours} hours';
+  } else if (difference.inHours == 1) {
+    return 'in an hour';
+  } else if (difference.inMinutes > 1) {
+    return 'in ${difference.inMinutes} minutes';
+  } else if (difference.inMinutes == 1) {
+    return 'in a minute';
+  } else if (difference.isNegative) {
+    // Past time
+    final pastDifference = DateTime.now().difference(date);
+    if (pastDifference.inDays > 1) {
+      return '${pastDifference.inDays} days ago';
+    } else if (pastDifference.inHours > 1) {
+      return '${pastDifference.inHours} hours ago';
+    } else if (pastDifference.inMinutes > 1) {
+      return '${pastDifference.inMinutes} minutes ago';
+    } else {
+      return 'just now';
+    }
+  } else {
+    return 'just now';
   }
 }
