@@ -1,11 +1,10 @@
-import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
-// import 'package:assets_audio_player/assets_audio_player.dart';
-import 'package:flutter/foundation.dart';
+import 'dart:typed_data';
+
+import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:permission_handler/permission_handler.dart';
-import 'package:android_intent_plus/android_intent.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -17,7 +16,8 @@ class NotificationService {
 
   Future<void> initialize() async {
     const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('app_icon');
+        AndroidInitializationSettings(
+            'app_icon'); // Make sure the icon is in assets
 
     const InitializationSettings initializationSettings =
         InitializationSettings(android: initializationSettingsAndroid);
@@ -39,19 +39,14 @@ class NotificationService {
     print('Notification clicked: ${response.payload}');
   }
 
-  void alarmCallback() {
-    // final AssetsAudioPlayer player = AssetsAudioPlayer();
-    // player.open(
-    //   Audio('assets/playtime.mp3'),
-    //   autoStart: true,
-    //   loopMode: LoopMode.single,
-    // );
-    print('Alarm sound is playing!');
+  Future<void> alarmCallback() async {
+    print('Alarm triggered');
   }
 
   Future<void> scheduleNotification(
       DateTime dueDateTime, String taskTitle) async {
     print('Scheduling notification for: $taskTitle at $dueDateTime');
+
     const AndroidNotificationDetails androidPlatformChannelSpecifics =
         AndroidNotificationDetails(
       'todo_channel',
@@ -88,24 +83,45 @@ class NotificationService {
       print('Notification scheduled successfully');
     }
 
-    final int alarmId = 0;
-    await AndroidAlarmManager.oneShotAt(
-      alarmTime,
-      alarmId,
-      alarmCallback,
-      exact: true,
-      wakeup: true,
-    );
-    print('Alarm scheduled at: $dueDateTime');
-
-    // final AndroidIntent intent = AndroidIntent(
-    //   action: 'android.intent.action.SET_ALARM',
-    //   arguments: <String, dynamic>{
-    //     'android.intent.extra.alarm.HOUR': dueDateTime.hour,
-    //     'android.intent.extra.alarm.MINUTES': dueDateTime.minute,
-    //     'android.intent.extra.alarm.SKIP_UI': false,
-    //   },
-    // );
-    // intent.launch();
+    if (alarmTime.isAfter(DateTime.now())) {
+      AwesomeNotifications().createNotification(
+        content: NotificationContent(
+          id: alarmTime.hashCode,
+          channelKey: 'alarm_channel',
+          title: 'Task Reminder',
+          body: 'Your task "$taskTitle" is due in 10 minutes!',
+          notificationLayout: NotificationLayout.Default,
+          autoDismissible: false,
+          locked: true,
+          fullScreenIntent: true,
+          displayOnForeground: true,
+          displayOnBackground: true,
+          criticalAlert: true,
+          wakeUpScreen: true,
+          category: NotificationCategory.Alarm,
+        ),
+        actionButtons: [
+          NotificationActionButton(
+            key: 'STOP_ALARM',
+            label: 'I got it!',
+            autoDismissible: true,
+            actionType: ActionType.DismissAction,
+          ),
+          NotificationActionButton(
+            key: 'SNOOZE_ALARM',
+            label: 'Snooze',
+            autoDismissible: true,
+            actionType: ActionType.Default,
+          ),
+        ],
+        schedule: NotificationCalendar.fromDate(
+          date: alarmTime,
+          preciseAlarm: true,
+        ),
+      );
+      print('Alarm notification scheduled.');
+    } else {
+      print('Alarm time $alarmTime is in the past and cannot be scheduled.');
+    }
   }
 }

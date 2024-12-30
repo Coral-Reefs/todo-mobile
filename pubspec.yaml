@@ -22,6 +22,7 @@ dependencies:
   android_alarm_manager_plus: ^4.0.5
   just_audio: ^0.9.42
   android_intent_plus: ^5.2.1
+  awesome_notifications: ^0.10.0
 
 dev_dependencies:
   flutter_test:
@@ -32,3 +33,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/playtime.mp3
+    - assets/app_icon.png
